@@ -18,7 +18,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::833838855372:role/GitHubActionsECRRole
+          role-to-assume: arn:aws:iam::REDACTED:role/GitHubActionsECRRole
           aws-region: us-east-1
 
       - name: Login to Amazon ECR
@@ -32,7 +32,19 @@ jobs:
         run: |
           docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
           docker tag $ECR_REPOSITORY:$IMAGE_TAG ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:$IMAGE_TAG
-          docker tag $ECR_REPOSITORY:$IMAGE_TAG ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:$IMAGE_TAG
+          docker tag $ECR_REPOSITORY:$IMAGE_TAG ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:latest
           docker push ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:$IMAGE_TAG
-          echo "Image $ECR_REPOSITORY:$IMAGE_TAG pushed successfully."
+          docker push ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:latest
+          echo "✅ Image $ECR_REPOSITORY:$IMAGE_TAG pushed successfully."
+
+      - name: Test container with environment variables
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          APP_SECRET: ${{ secrets.APP_SECRET }}
+        run: |
+          echo "🚀 Running container test with secure environment variables..."
+          docker run \
+            -e APP_ENV=prod \
+            -e SECRET_KEY=$APP_SECRET \
+            $ECR_REGISTRY/mywebapp:latest
 
