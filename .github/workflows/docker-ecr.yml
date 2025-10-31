@@ -1,5 +1,28 @@
-      - uses: aws-actions/amazon-ecr-login@v2
+name: Build and Push to ECR
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR
         id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build, tag, and push image to ECR
         env:
@@ -13,8 +36,18 @@
 
       - name: Test container with environment variables
         run: |
-          docker run -d \
+          docker run -d --name mywebapp-test \
             -e APP_ENV=prod \
             -e SECRET_KEY=${{ secrets.APP_SECRET }} \
             ${{ steps.login-ecr.outputs.registry }}/mywebapp:${{ github.run_number }}
+
+          # Optional short wait to let container start
+          sleep 10
+
+          # Check running containers
+          docker ps
+
+          # Stop and remove container
+          docker stop mywebapp-test
+          docker rm mywebapp-test
 
