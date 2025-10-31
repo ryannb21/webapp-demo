@@ -18,7 +18,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::833838855372:role/GitHubActionsECRRole
+          role-to-assume: arn:aws:iam::REDACTED:role/GitHubActionsECRRole
           aws-region: us-east-1
 
       - name: Login to Amazon ECR
@@ -43,8 +43,28 @@ jobs:
           APP_SECRET: ${{ secrets.APP_SECRET }}
         run: |
           echo "🚀 Running container test with secure environment variables..."
-          docker run \
+          
+          # Start container in background
+          docker run -d --name test_container \
             -e APP_ENV=prod \
             -e SECRET_KEY=$APP_SECRET \
             $ECR_REGISTRY/mywebapp:latest
+
+          # Wait a few seconds to allow startup
+          sleep 5
+
+          # Check logs for successful startup
+          echo "📜 Container logs:"
+          docker logs test_container --tail 30
+
+          # Optional: confirm container is running
+          echo "🔍 Checking container status..."
+          docker ps | grep test_container || (echo "❌ Container did not stay running!" && exit 1)
+
+          # Stop & remove container to clean up
+          echo "🧹 Stopping and removing test container..."
+          docker stop test_container
+          docker rm test_container
+
+          echo "✅ Container test completed successfully!"
 
