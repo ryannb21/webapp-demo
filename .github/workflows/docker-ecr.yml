@@ -1,0 +1,69 @@
+name: Build and Push to ECR
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::833838855372:role/GitHubActionsECRRole
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push image to ECR
+        env:
+          ECR_REPOSITORY: mywebapp
+          IMAGE_TAG: ${{ github.run_number }}
+        run: |
+          docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
+          docker tag $ECR_REPOSITORY:$IMAGE_TAG ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:$IMAGE_TAG
+          docker tag $ECR_REPOSITORY:$IMAGE_TAG ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:latest
+          docker push ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:latest
+          echo "✅ Image $ECR_REPOSITORY:$IMAGE_TAG pushed successfully."
+
+      - name: Test container with environment variables
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          APP_SECRET: ${{ secrets.APP_SECRET }}
+        run: |
+          echo "🚀 Running container test with secure environment variables..."
+          
+          # Start container in background
+          docker run -d --name test_container \
+            -e APP_ENV=prod \
+            -e SECRET_KEY=$APP_SECRET \
+            $ECR_REGISTRY/mywebapp:latest
+
+          # Wait a few seconds to allow startup
+          sleep 5
+
+          # Check logs for successful startup
+          echo "📜 Container logs:"
+          docker logs test_container --tail 30
+
+          # Optional: confirm container is running
+          echo "🔍 Checking container status..."
+          docker ps | grep test_container || (echo "❌ Container did not stay running!" && exit 1)
+
+          # Stop & remove container to clean up
+          echo "🧹 Stopping and removing test container..."
+          docker stop test_container
+          docker rm test_container
+
+          echo "✅ Container test completed successfully!"
